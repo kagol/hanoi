@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 版汉诺塔游戏</title>
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+      font: normal 14px/1.42857 Tahoma;
+    }
+
+    #app {height: 100vh;}
+
+    /******* 引导页 *******/
+    .guide-box {
+      inset-block-start: 50%;
+      margin: 0 auto;
+      transform: translateY(25%);
+    }
+    .guide-box::backdrop {background: rgba(0, 0, 0, .5);}
+    .guide-box > h2 {
+      margin: 0;
+      text-align: center;
+      font-size: 18px;
+    }
+    .guide-box > ul {font-size: 13px;}
+
+    /******* 游戏结算页 *******/
+    .result-box-outer {
+      position: fixed;
+      inset: 0;
+      visibility: hidden;
+      background: rgba(0, 0, 0, .7);
+    }
+    .result-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      display: block;
+      padding: 0 50px 20px;
+      margin: 0;
+      text-align: center;
+      transform: translate(-50%, -50%) scale(0);
+      background: #f5e1a8;
+      border: 0;
+      border-radius: 20% / 50%;
+      box-shadow: 0 0 60px #ffec3d;
+      opacity: 0;
+      transition: all ease-in-out .5s;
+    }
+    .result-box[open] {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .result-box-title {
+      display: flex;
+      justify-content: center;
+      gap: .25em;
+      margin: 0;
+      transform: translateY(-0.5em);
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffec3d;
+      text-shadow: 0 0 1px #000;
+    }
+    .result-box-title > span {transform: translateY(-0.25em);}
+    .result-box-title > span:first-child {transform: rotate(-35deg);}
+    .result-box-title > span:last-child {transform: rotate(35deg);}
+
+    /******* 结算信息 *******/
+    .result-info {
+      display: inline-grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 6px 1em;
+      margin: 0;
+    }
+    .result-info > dt {
+      text-align: right;
+      color: #333;
+      text-align-last: justify;
+    }
+    .result-info > dt::after {
+      position: absolute;
+      content: '：';
+    }
+    .result-info > dd {
+      text-align: left;
+      margin: 0;
+      color: #7bca13;
+    }
+
+    /******* 游戏设置栏 *******/
+    .setting-bar {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      padding: .5em .5em 0;
+      background: #fff;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+    .setting-bar > summary {
+      padding: .5em;
+      margin: -0.5em -0.5em 0;
+      border-bottom: 1px solid #ccc;
+      cursor: pointer;
+      user-select: none;
+    }
+    .setting-bar[open] {padding: 0.5em;}
+    .setting-bar[open] > summary {margin-bottom: 0.5em;}
+    .setting-bar > section {margin: 1em;}
+    .setting-bar .btn-block {margin: 1em 0;}
+
+    /******* 按钮等 UI *******/
+    .btn {
+      font-size: 13px;
+      border: 2px solid;
+      border-radius: 2em;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, .15);
+      transition: all .2s;
+      cursor: pointer;
+    }
+    .btn:hover {transform: translateY(-1px) scale(1.01);}
+
+    .btn-primary {
+      padding: .5em 1em;
+      color: #db8e12;
+      background: linear-gradient(#fdfeed, #f7dcb2);
+    }
+    .btn-primary:hover {color: #e9b60e;}
+
+    .btn-close {
+      position: absolute;
+      top: 10px;
+      right: 5px;
+      padding: 5px;
+      background: #fdfeed;
+      border-color: #666;;
+    }
+
+    .btn-block {
+      display: block;
+      width: 100%;
+    }
+
+    .level-selector {
+      padding: .5em;
+      border-color: #d3d3d3;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <details class="setting-bar">
+    <summary>设置</summary>
+    <section>
+      难度：<select class="btn level-selector"></select>
+      <button class="btn btn-primary btn-block js-restart">重玩</button>
+    </section>
+  </details>
+
+  <dialog class="guide-box">
+    <h2>游戏规则</h2>
+    <ul>
+      <li>将左边A柱杆上所有的盘子挪进右边的C柱杆中即可获胜；</li>
+      <li>一次只能挪动柱杆最上面的一个盘子；</li>
+      <li>每个盘子的上面只能放置比它小的盘子；</li>
+      <li>可利用中间的B柱杆来中转、倒换盘子。</li>
+    </ul>
+    <p><strong>操作说明：</strong>鼠标点击拾取盘子，点击柱杆放置拾取的盘子。</p>
+    <button class="btn btn-primary btn-block">开始游戏</button>
+  </dialog>
+
+  <div class="result-box-outer">
+    <dialog class="result-box">
+      <h2 class="result-box-title">
+        <span>恭</span>
+        <span>喜</span>
+        <span>过</span>
+        <span>关</span>
+      </h2>
+      <button class="btn btn-close">✖️</button>
+      <dl class="result-info"></dl>
+      <p>
+        <button class="btn btn-primary js-next-level">挑战更高难度</button>
+        <strong class="btn-primary js-all-complete">已完成所有难度的挑战！</strong>
+      </p>
+    </dialog>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/+esm",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@tweenjs/tween.js": "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@23.1.1/dist/tween.esm.js",
+        "canvas-confetti": "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/+esm"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+    import * as TWEEN from '@tweenjs/tween.js';
+    import confetti from 'canvas-confetti';
+
+    const model = {
+      tableSize: {
+        width: 30,  // 长
+        depth: 10,  // 宽
+        height: 0.5  // 高
+      },
+      pillarSize: {
+        height: 5.4,
+        radius: 0.2,
+        baseHeight: 0.18
+      },
+      plate: {
+        nums: 1,  // 盘子数量
+        maxPlateNums: 8,
+        height: 0.5,
+        colors: [
+          '#c186e0', '#997feb', '#59b1ff', '#36cfc9',
+          '#bae637', '#e7d558', '#ff9c6e', '#ff6b6b'
+        ]
+      },
+
+      font: null,
+      loadFont: () => {
+        const url = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/'
+        const fontName = 'helvetiker_regular.typeface.json';
+
+        return new Promise((resolve, reject) => {
+          if (model.font) {
+            return resolve();
+          }
+
+          new FontLoader().load(url + fontName,
+            (font) => {
+              // 字体加载成功，font 是一个表示字体的 Shape 类型的数组
+              model.font = font;
+              resolve();
+            },
+            null,
+            (err) => reject(err)
+          );
+        });
+      },
+
+      scene: new THREE.Scene(),
+      lastHoveredPlate: null,
+      currentPickedPlate: null,
+      pillarsMap: new Map(
+        ['A', 'B', 'C'].map(k => [k, null])
+      ),
+
+      steps: 0,
+      startTime: null
+    };
+
+    /* 容器 */
+    const containerView = {
+      init() {
+        this.el = document.getElementById('app');
+      },
+      get size() {
+        return this.el.getBoundingClientRect();
+      },
+      listenEvent(evtName, cb) {
+        this.el.addEventListener(evtName, cb, false);
+      },
+      togglePointer(intersecting) {
+        this.el.style.setProperty('cursor', intersecting ? 'pointer' : 'default');
+      }
+    };
+
+    /* 相机 */
+    const cameraView = {
+      init(width, height) {
+        const fov = 45;
+        this.camera = new THREE.PerspectiveCamera(this.fov, width / height, 1, 500);
+      },
+      fitPosition(layoutWidth) {
+        const angle = this.camera.fov / 2;  // 夹角
+        const rad = THREE.MathUtils.degToRad(angle);  // 转为弧度值
+        const cameraZ = layoutWidth / 2 / Math.tan(rad);
+        // 调整相机的 Z 轴位置，使桌台元素完整显示到场景
+        this.camera.position.set(0, 15, cameraZ);
+      }
+    };
+
+    /* 渲染器 */
+    const rendererView = {
+      init(width, height) {
+        this.renderer = new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: true  // 开启抗锯齿
+        });
+        this.domElement = this.renderer.domElement;
+        this.setSize(width, height);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.setClearColor('#f8f8f6', 1);
+      },
+      appendToDOM(dom) {
+        dom.appendChild(this.domElement);
+      },
+      setSize(width, height) {
+        this.renderer.setSize(width, height);
+      },
+      render(scene, camera) {
+        this.renderer.render(scene, camera);
+      }
+    };
+
+    /* 轨道控制器 */
+    const controlsView = {
+      init(camera, domElement) {
+        const controls = new OrbitControls(camera, domElement);
+        const distanceZ = camera.position.z;
+        controls.minDistance = distanceZ / 2;  // 相机离目标点的最小距离（放大）
+        controls.maxDistance = distanceZ;  // 相机离目标点的最大距离（缩小）
+      }
+    };
+
+    /* 灯光 */
+    class Lights {
+      constructor({ directionX, directionY, directionZ }) {
+        const ambientLight = new THREE.AmbientLight('#fff', 1);  // 环境光
+        const spotLight = new THREE.SpotLight('#fdf4d5');
+        spotLight.position.set(5, directionY * 4, 0);
+        spotLight.angle = Math.PI / 2;
+        spotLight.power = 2000;
+        const spotLightHelper = new THREE.SpotLightHelper(spotLight, '#00f');
+
+        const directLight = new THREE.DirectionalLight('#fff', 3);  // 平行光
+        directLight.position.set(-directionX / 3, directionY * 4, directionZ * 1.5);
+        directLight.castShadow = true;
+        directLight.shadow.camera.left = -directionX;
+        directLight.shadow.camera.right = directionX;
+        directLight.shadow.camera.top = directionZ;
+        directLight.shadow.camera.bottom = -directionZ;
+
+        const directLightHelper = new THREE.DirectionalLightHelper(directLight, 1, '#f00');
+
+        return [ambientLight, spotLight, directLight];
+      }
+    }
+
+    /* 桌台 */
+    class Table {
+      constructor({ width, height, depth }) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshLambertMaterial({
+          color: '#eeeec0'
+        });
+        const url = 'https://cdn.pixabay.com/photo/2016/12/26/13/47/fresno-1932211_1280.jpg';
+
+        // 动态更新材质纹理
+        new THREE.TextureLoader().load(url, (texture) => {
+          texture.needsUpdate = true;
+          material.needsUpdate = true;
+          material.map = texture;
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.receiveShadow = true;
+
+        return mesh;
+      }
+    }
+
+    /* 柱杆 */
+    class Pillar extends THREE.Group {
+      get tag() {
+        return this.userData.tag;
+      }
+      set tag(value) {
+        this.userData.tag = value;
+      }
+
+      constructor({ radius, height, baseHeight, plateHeight }, key) {
+        super();
+        this.userData.size = { radius, height, baseHeight, plateHeight };
+        this.tag = key;
+        this.plates = [];
+
+        const geometry = new THREE.CylinderGeometry(radius, radius, height);
+        const material = new THREE.MeshPhongMaterial({
+          color: '#e6e6e9',
+          emissive: '#889',  // 放射光
+        });
+
+        const body = new THREE.Mesh(geometry, material);
+        body.castShadow = true;
+        body.receiveShadow = true;
+
+        const base = this.#createBase(radius, baseHeight);
+        base.position.y = -height / 2 + baseHeight;
+
+        const text = this.#createLabel(key);
+        const holder = this.#createHolder(body);
+
+        const parts = [body, base, text, holder].map(part => {
+          part.name = 'pillar';
+          return part;
+        });
+
+        this.add(...parts);
+      }
+
+      #createBase(r, height) {
+        const pointNum = 10;
+        const unitY = height / (pointNum - 1);
+        const points = Array.from({ length: pointNum }).map((v, i) =>
+          new THREE.Vector2(
+            Math.sin(i * r) * r + r,
+            -unitY * i
+          )
+        );
+        const geometry = new THREE.LatheGeometry(points, 32);
+        const material = new THREE.MeshLambertMaterial({
+          color: '#353546',
+          side: THREE.DoubleSide
+        });
+
+        return new THREE.Mesh(geometry, material);
+      }
+
+      #createLabel(str) {
+        const { radius, height } = this.userData.size;
+        const fontSize = radius * 2;
+        const text = presenter.createText(str, {
+          size: fontSize,
+          color: '#202020'
+        });
+
+        text.position.y = height / 2 + fontSize;
+        return text;
+      }
+
+      #createHolder(body) {
+        const mesh = body.clone();
+        const { height } = this.userData.size;
+        // 与坐标原点的 y 距离
+        const distanceOriginY = this.position.y - height / 2;
+        const scaleY = 1.5;
+
+        mesh.visible = false;  // 不显示
+        mesh.position.copy(body.position);
+        mesh.scale.set(3, scaleY, 3);
+        mesh.position.y = height * scaleY / 2 + distanceOriginY;
+
+        return mesh;
+      }
+
+      addPlate(plate, animateCallback) {
+        if (this.plates.length) {
+          // 当前柱杆最顶层的盘子不可拾取（即将被盖住）
+          this.plates.slice(-1)[0].pickable = false;
+        }
+
+        plate.pickable = true;
+
+        if (typeof animateCallback === 'function') {
+          plate.appendTo(this).onComplete(() => {
+            plate.offsetY = plate.position.y;
+            plate.pillarInfo = this.userData;
+            plate.picked = false;
+            this.plates.push(plate);
+            animateCallback();
+          });
+          return;
+        }
+
+        const vector = this.getPlacementPosition();
+
+        plate.position.copy(vector);
+        plate.offsetY = vector.y;
+        plate.pillarInfo = this.userData;
+        plate.picked = false;
+        this.plates.push(plate);
+      }
+
+      popOutPlate() {
+        const topPlate = this.plates.pop();
+
+        if (this.plates.length) {
+          this.plates.slice(-1)[0].pickable = true;
+        }
+
+        return topPlate;
+      }
+
+      getPlacementPosition() {
+        const { height: pillarHeight, baseHeight, plateHeight } = this.userData.size;
+        // 与坐标原点的 y 距离
+        const distanceOriginY = this.position.y - pillarHeight / 2;
+        const startY = plateHeight / 2 + distanceOriginY + baseHeight;
+        const stackHeight = this.plates.length * plateHeight;
+        const vector = new THREE.Vector3();
+
+        vector.copy(this.position);
+        vector.setY(startY + stackHeight);
+
+        return vector;
+      }
+    }
+
+    /* 盘子 */
+    class Plate extends THREE.Mesh {
+      get picked() {
+        return this.userData.picked;
+      }
+      set picked(isPicked) {
+        this.userData.picked = isPicked;
+
+        if (isPicked) {
+          this.#tweenPickUp();
+          this.pickable = false;
+
+          const sourcePillar = presenter.getPillar(this.pillarInfo.tag);
+          sourcePillar.popOutPlate();
+        }
+      }
+
+      constructor(size, color, i) {
+        super();
+
+        ['size', 'order', 'offsetY', 'pillarInfo', 'pickable'].forEach((key) => {
+          Object.defineProperty(this, key, {
+            get() {
+              return this.userData[key];
+            },
+            set(value) {
+              this.userData[key] = value;
+            }
+          });
+        });
+
+        this.size = size;
+        this.order = i;
+        this.name = 'plate';
+
+        this.geometry = this.#createGeometry();
+        this.material = new THREE.MeshLambertMaterial({
+          color,
+          side: THREE.DoubleSide
+        });
+        this.material.shadowSide = THREE.FrontSide;
+        this.castShadow = true;
+        this.receiveShadow = true;
+
+        const text = this.#createLabel(i);
+        this.add(text);  // 添加编号
+      }
+
+      #createGeometry() {
+        const { radius, height, poreRadius } = this.size;
+        const sideRadius = radius - poreRadius;
+        const topPoints = [
+          new THREE.Vector2(poreRadius, 0),
+          new THREE.Vector2(poreRadius, height / 2),
+          new THREE.Vector2(sideRadius - 0.08, height / 2),
+          new THREE.Vector2(sideRadius, height / 4),
+          new THREE.Vector2(sideRadius, 0)
+        ];
+        const bottomPoints = topPoints.map(vector =>
+          vector.clone().setY(vector.y * -1)
+        ).reverse();
+        const points = [...topPoints, ...bottomPoints];
+
+        return new THREE.LatheGeometry(points, 64);
+      }
+
+      #createLabel(str) {
+        const { radius, height, poreRadius } = this.size;
+        const text = presenter.createText(str, {
+          size: height / 1.6,
+          color: '#fff'
+        });
+
+        text.position.z = radius - poreRadius;
+        return text;
+      }
+
+      #tweenHover(isHover) {
+        const { height } = this.size;
+        const tweenGroup = new TWEEN.Group();
+        const scaleValue = isHover ? 1.1 : 1;
+        // 缩放
+        const scaleTween = new TWEEN.Tween(this.scale)
+          .to({ x: scaleValue, y: scaleValue, z: scaleValue }, 200)
+          .start();
+        // 抬起/放下
+        const liftTween = new TWEEN.Tween(this.position)
+          .to({ y: this.offsetY + (isHover ? height / 2 : 0) }, 200)
+          .start();
+
+        tweenGroup.add(scaleTween, liftTween);
+        tweenGroup.update();
+      }
+
+      #tweenPickUp() {
+        const { height } = this.pillarInfo.size;
+        const upDistence = height + height / 2;
+        const angleRad = THREE.MathUtils.degToRad(15);  // 倾斜角度（转为弧度）
+        const slantTween = new TWEEN.Tween(this.rotation)
+          .to({ x: angleRad }, 150);
+
+        return new TWEEN.Tween(this.position)
+          .to({ y: upDistence }, 200)
+          .easing(TWEEN.Easing.Quadratic.Out)
+          .chain(slantTween)
+          .start();
+      }
+
+      #tweenPutIn(pillar) {
+        const currentPillar = presenter.getPillar(this.pillarInfo.tag);
+        const targetPillar = pillar || currentPillar;
+        const isSamePillar = currentPillar.id === targetPillar.id;
+        const placementPosition = targetPillar.getPlacementPosition();
+
+        // 放平
+        const slantTween = new TWEEN.Tween(this.rotation)
+          .to({ x: 0 }, 150);
+
+        // 平移
+        const panTween = new TWEEN.Tween(this.position)
+          .to({
+            x: targetPillar.position.x,
+            y: this.position.y
+          }, isSamePillar ? 0 : 450)  // 如果是同一个柱杆，无需平移（无过渡时间）
+          .easing(TWEEN.Easing.Quadratic.Out);
+
+        // 落地
+        const putdownTween = new TWEEN.Tween(this.position)
+          .to({ y: placementPosition.y }, 400)
+          .easing(TWEEN.Easing.Quadratic.Out);
+
+        // 缩放
+        const scaleTween = new TWEEN.Tween(this.scale)
+          .to({ x: 1, y: 1, z: 1 }, 200);
+
+        // 动画编排
+        slantTween.chain(putdownTween, scaleTween);
+        panTween.chain(slantTween).start();
+
+        return putdownTween;
+      }
+
+      hover(isHover) {
+        this.#tweenHover(isHover);
+      }
+
+      appendTo(pillar) {
+        return this.#tweenPutIn(pillar);
+      }
+    }
+
+    /* 文本 */
+    class Text {
+      constructor(font, text, { size, color }) {
+        const geometry = new TextGeometry(String(text), {
+          font,
+          size,
+          height: 0.02
+        });
+        geometry.center();  // 文本居中
+        const material = new THREE.MeshBasicMaterial({ color });
+
+        return new THREE.Mesh(geometry, material);
+      }
+    }
+
+    /* 盘子放置指示 */
+    const placementView = {
+      init(scene) {
+        this.ghostPlate = new THREE.Mesh();
+        scene.add(this.ghostPlate);
+      },
+      createFrom(plate) {
+        presenter.dispose3dObject(this.ghostPlate);
+
+        this.ghostPlate.visible = false;
+        this.ghostPlate.geometry = plate.geometry.clone();
+        this.ghostPlate.material = plate.material.clone();
+        this.ghostPlate.material.transparent = true;
+        this.ghostPlate.material.opacity = 0.5;
+      },
+      display(position) {
+        this.ghostPlate.visible = Boolean(position);
+
+        if (position) {
+          this.ghostPlate.position.copy(position);
+        }
+      }
+    };
+
+    /* 帮助页 */
+    const guidecontainerView = {
+      init() {
+        this.box = document.querySelector('.guide-box');
+        this.box.addEventListener('close', () => {
+          presenter.startGame();
+        }, false);
+        this.box.querySelector('.btn-primary').addEventListener('click', () => {
+          this.toggle(false);
+        }, false);
+      },
+      toggle(isVisible) {
+        isVisible ? this.box.showModal() : this.box.close();
+      }
+    };
+
+    /* 游戏设置栏 */
+    const settingBarView = {
+      init(initNums, maxNums) {
+        this.box = document.querySelector('.setting-bar');
+        this.selector = this.box.querySelector('.level-selector');
+        this.buildSelector(maxNums);
+        this.updateLevel(initNums);
+        
+        this.selector.addEventListener('change', ({ target }) => {
+          presenter.updatePlateNums(target.value);
+        }, false);
+
+        this.box.querySelector('.js-restart').addEventListener('click', () => {
+          this.toggle(false);
+          presenter.resetGame();
+        }, false);
+      },
+      toggle(isOpen) {
+        this.box.open = isOpen;
+      },
+      updateLevel(value) {
+        this.selector.value = value;
+      },
+      buildSelector(nums) {
+        const options = Array.from({ length: nums }).map((v, i) => 
+          `<option value="${i + 1}">${i + 1} 个盘子</option>`
+        ).join('\n');
+        this.selector.innerHTML = options;
+      }
+    };
+
+    const resultBoxView = {
+      init() {
+        this.box = document.querySelector('.result-box');
+        this.backdrop = this.box.parentNode;
+        this.resultInfo = this.box.querySelector('.result-info');
+        this.nextLvButton = this.box.querySelector('.js-next-level'); 
+        this.completeTip = this.box.querySelector('.js-all-complete'); 
+
+        this.nextLvButton.addEventListener('click', () => {
+          this.toggle(false);
+          presenter.resetGame(1);
+        }, false);
+        this.box.querySelector('.btn-close').addEventListener('click', () => {
+          this.toggle(false);
+          presenter.resetGame();
+        }, false);
+      },
+      toggle(isVisible) {
+        if (isVisible) {
+          this.backdrop.style.visibility = 'visible';
+          this.box.show();
+          this.cheering();
+        } else {
+          this.backdrop.style.visibility = 'hidden';
+          this.box.close();
+        }
+      },
+      displayNext(isAllComplete) {
+        this.nextLvButton.style.display = isAllComplete ? 'none' : 'unset';
+        this.completeTip.style.display = isAllComplete ? 'unset' : 'none';
+      },
+      updateResult({ nums, times, steps }) {
+        const ms = times / 1000;
+        const hours = (ms / 3600) | 0;
+        const minutes = (ms / 60 % 60) | 0;
+        const seconds = (ms % 60) | 0;
+        const timeStr = [
+          hours ? `<b>${hours}</b>小时` : '',
+          minutes ? `<b>${minutes}</b>分` : '',
+          seconds ? `<b>${seconds}</b>秒` : ''
+        ].join('');
+
+        this.resultInfo.innerHTML = `
+          <dt>难度</dt>
+          <dd><b>${nums}</b>个盘子</dd>
+          <dt>总耗时</dt>
+          <dd>${timeStr}</dd>
+          <dt>移动步数</dt>
+          <dd><b>${steps}</b>步</dd>`;
+      },
+      cheering() {
+        const duration = 3;  // 持续时长(s)
+        const endTime = Date.now() + duration * 1000;
+        const colors = ['#cd4646', '#a6a2ee',  '#efcd80'];
+        const options = {
+          particleCount: 3,
+          spread: 55,
+          origin: { x: 0.5, y: 0.6 },
+          colors
+        };
+
+        (function frame() {
+          confetti({ ...options, angle: 60 });
+          confetti({ ...options, angle: 120 });
+
+          if (Date.now() < endTime) {
+            requestAnimationFrame(frame);
+          }
+        }());
+      }
+    };
+
+    const presenter = {
+      init() {
+        // 初始化容器
+        containerView.init();
+        const { width, height } = containerView.size;
+
+        // 初始化相机
+        cameraView.init(width, height);
+        cameraView.fitPosition(model.tableSize.width);
+
+        // 初始化渲染器
+        rendererView.init(width, height);
+        rendererView.appendToDOM(containerView.el);
+
+        // 初始化相机轨道控制器
+        controlsView.init(cameraView.camera, rendererView.domElement);
+
+        // 添加灯光
+        const lights = new Lights({
+          directionX: model.tableSize.width,
+          directionY: model.pillarSize.height,
+          directionZ: model.tableSize.depth
+        });
+        model.scene.add(...lights);
+
+        // 添加桌台
+        model.scene.add(new Table(model.tableSize));
+
+        model.loadFont().then(() => {
+          this.addPillars();  // 添加柱杆
+          this.addPlates();  // 添加盘子
+        });
+
+        // 初始化放置指示
+        placementView.init(model.scene);
+
+        // 初始化事件交互
+        this.initInteraction();
+
+        // 循环渲染
+        this.animate();
+
+        guidecontainerView.init();
+        guidecontainerView.toggle(true);
+        settingBarView.init(model.plate.nums, model.plate.maxPlateNums);
+        resultBoxView.init();
+        resultBoxView.displayNext(model.plate.nums === model.plate.maxPlateNums);
+      },
+      addPillars() {
+        const { width: tableWidth, height: tableHeight } = model.tableSize;
+        const size = { ...model.pillarSize, plateHeight: model.plate.height };
+        const y = (tableHeight + size.height) / 2;
+
+        model.pillarsMap.forEach((v, k, map) => {
+          map.set(k, new Pillar(size, k));
+        });
+
+        const unitX = tableWidth / 2 / 3;
+
+        this.getPillar('A').position.set(-unitX * 2, y, 0);
+        this.getPillar('B').position.set(0, y, 0);
+        this.getPillar('C').position.set(unitX * 2, y, 0);
+
+        const pillars = [...model.pillarsMap.values()];
+        model.scene.add(...pillars);
+      },
+      addPlates() {
+        const { height: plateHeight, colors, nums } = model.plate;
+        const { depth: tableDepth } = model.tableSize;
+        const maxPlateRadius = tableDepth / 2.5;
+        const platePoreRadius = model.pillarSize.radius + 0.04;  // 孔径（比支柱大一点）
+
+        Array.from({ length: nums }).forEach((v, i) => {
+          // 使用等比数列从大到小创建不同半径的圆盘，0.87 为公比
+          const r = maxPlateRadius - i * 0.87 ** (nums - 1);
+          const plate = new Plate({
+            radius: r,
+            height: plateHeight,
+            poreRadius: platePoreRadius
+          }, colors[i], nums - i);
+
+          this.getPillar('A').addPlate(plate);
+        });
+
+        model.scene.add(...this.getPillar('A').plates);
+      },
+
+      createText(text, options) {
+        return new Text(model.font, text, options);
+      },
+
+      initInteraction() {
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+
+        // 鼠标移动
+        containerView.listenEvent('pointermove', (e) => {
+          const object = this.getIntersects(e)[0];
+
+          if (!object?.name) {  // 非交互对象
+            containerView.togglePointer(false);
+            placementView.display(false);
+          }
+
+          this.handlePlateHover(object);
+          this.handlePillarHover(object);
+        }, false);
+
+        // 鼠标点击
+        containerView.listenEvent('click', (e) => {
+          const object = this.getIntersects(e)[0];
+          const { currentPickedPlate } = model;
+
+          this.handlePlateClick(object);
+          this.handlePillarClick(object);
+        }, false);
+
+        // 容器大小改变
+        const ob = new ResizeObserver((entries) => {
+          for (let entry of entries) {
+            const { width, height } = entry.contentRect;
+
+            rendererView.setSize(width, height);
+            cameraView.camera.aspect = width / height;
+            cameraView.camera.updateProjectionMatrix();
+          }
+        });
+        ob.observe(containerView.el);
+      },
+      getIntersects({ clientX, clientY }) {
+        const { width, height, top, left } = containerView.el.getBoundingClientRect();
+
+        this.mouse.x = (clientX - left) / width * 2 - 1;
+        this.mouse.y = -(clientY - top) / height * 2 + 1;
+        this.raycaster.setFromCamera(this.mouse, cameraView.camera);
+
+        return this.raycaster.intersectObjects(model.scene.children)
+          .flatMap(({ object }) => object.name ? [object] : []);
+      },
+
+      handlePlateHover(plate) {
+        const lastPlate = model.lastHoveredPlate;
+        const resetLastPlate = () => {
+          // 移除上一次悬浮的盘子（如有）的样式
+          if (lastPlate && !lastPlate.picked) {
+            lastPlate.hover(false);
+            model.lastHoveredPlate = null;
+          }
+        };
+
+        if (plate?.name !== 'plate') {  // 当前悬浮物体不是盘子
+          resetLastPlate();
+          return;
+        }
+
+        if (model.currentPickedPlate) {  // 存在已拾取的盘子
+          containerView.togglePointer(false);
+          return;
+        }
+
+        if (!plate.pickable) {  // 不允许拾取
+          containerView.togglePointer(false);
+          resetLastPlate();
+          return;
+        }
+
+        if (plate.id !== lastPlate?.id) {  // 当前悬浮物体不是上一次悬浮的盘子
+          resetLastPlate();
+          plate.hover(true);
+          model.lastHoveredPlate = plate;
+          containerView.togglePointer(true);
+        }
+      },
+      handlePlateClick(plate) {
+        if (plate?.name !== 'plate') {
+          return;
+        }
+
+        // 不允许拾取的盘子，或当前已拾取盘子
+        if (!plate.pickable || model.currentPickedPlate) {
+          return;
+        }
+
+        plate.picked = true;
+        model.currentPickedPlate = plate;
+        placementView.createFrom(plate);
+        containerView.togglePointer(false);
+      },
+
+      handlePillarHover(pillarPart) {
+        if (pillarPart?.name !== 'pillar') {
+          return;
+        }
+
+        const pillar = pillarPart.parent;
+
+        if (model.currentPickedPlate) {
+          const topPlate = pillar.plates.slice(-1)?.[0];
+
+          // 满足放置条件
+          if (!topPlate || topPlate?.order >= model.currentPickedPlate.order) {
+            const vector = pillar.getPlacementPosition();
+
+            placementView.display(vector);
+            containerView.togglePointer(true);
+          }
+        }
+      },
+      handlePillarClick(pillarPart) {
+        if (pillarPart?.name !== 'pillar') {
+          return;
+        }
+
+        const pillar = pillarPart.parent;
+        const pickedPlate = model.currentPickedPlate;
+
+        if (pickedPlate) {
+          const targetTopPlate = pillar.plates.slice(-1)[0];
+
+          // 不满足放置条件
+          if (targetTopPlate && targetTopPlate.order < pickedPlate.order) {
+            return;
+          }
+
+          model.steps++;
+          placementView.display(false);
+          pillar.addPlate(pickedPlate, () => {
+            if (pillar.tag === 'C') {
+              this.checkResult();
+            }
+          });
+          model.currentPickedPlate = null;
+        }
+      },
+
+      getPillar(tag) {
+        return model.pillarsMap.get(tag);
+      },
+
+      updatePlateNums(value) {
+        model.plate.nums = Number(value);
+        settingBarView.updateLevel(value);
+      },
+
+      startGame() {
+        model.steps = 0;
+        model.startTime = Date.now();
+      },
+
+      resetGame(addedNums) {
+        model.pillarsMap.forEach((pillar) => {
+          while(pillar.plates.length) {
+            const plate = pillar.plates.pop();
+            model.scene.remove(plate);
+            this.dispose3dObject(plate);
+          }
+        });
+
+        if (typeof addedNums === 'number') {
+          this.updatePlateNums(model.plate.nums + addedNums);
+        }
+
+        this.addPlates();
+        this.startGame();
+      },
+
+      checkResult() {
+        const targetPlates = this.getPillar('C').plates;
+        const { plate, startTime, steps } = model;
+
+        if (targetPlates.length === plate.nums) {
+          if (targetPlates.every((item, i) => item.order === plate.nums - i)) {
+            resultBoxView.updateResult({
+              nums: plate.nums,
+              times: Date.now() - startTime,
+              steps
+            });
+            resultBoxView.displayNext(plate.nums === plate.maxPlateNums);
+            resultBoxView.toggle(true);
+          }
+        }
+      },
+
+      dispose3dObject(obj) {
+        if (obj.geometry) {
+          obj.geometry.dispose();  // 清除几何体
+        }
+
+        if (obj.material) {
+          obj.material.dispose();  // 清除材质
+        }
+
+        if (Array.isArray(obj.children)) {
+          obj.children.forEach((child) => {
+            this.dispose3dObject(child);  // 递归
+          });
+        }
+      },
+
+      /* 渲染循环 */
+      animate() {
+        requestAnimationFrame(this.animate.bind(this));
+        TWEEN.update();
+        rendererView.render(model.scene, cameraView.camera);
+      }
+    };
+
+    presenter.init();
+
+    // 当盘子数为1时，步数为1。
+    // 当盘子数为n时，步数为2^n-1。
+  </script>
+</body>
+</html>
